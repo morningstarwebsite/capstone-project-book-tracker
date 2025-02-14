@@ -1,0 +1,61 @@
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="styles/main.css" />
+    <title>Book Tracker</title>
+</head>
+<body>
+    <header>
+        <div class = "hero">
+            <h1>My Book Tracker</h1>
+            <a href="/"> 
+                <p>Home</p>
+            </a>
+        </div>
+    </header>
+
+  <div class="books">
+    <div>
+      <form class="book-search" action="/search" method="get">
+          <input type="text" name="q" placeholder="Search for a book..." required>
+          <button type="submit">Search</button>
+      </form>
+    </div>
+    <a class="add-book" href="/add">Add New Book</a>
+
+    <% if (typeof message !== 'undefined' && message) { %>
+        <p><%= message %></p>
+    <% } else if (books && books.length > 0) { %>
+
+     <% books.forEach(book => { %>
+        <div class="book">
+              <div class="book-details"> 
+                <img src="<%= book.cover_url %>" alt="Book Cover" width="350" height="400">
+                <div class="book-info">
+                  <h3><strong><%= book.title %></strong> </h3>
+                  <h4>by <%= book.author %></h4>
+                  <h4>Review:</h4> 
+                  <p><%= book.review || "No review yet" %> </p>
+              
+                 <div class="button edit">
+                  <a href="/edit/<%= book.id %>"><button type="button">Edit</button></a>
+                  <form action="/delete/<%= book.id %>" method="post" style="display:inline;">
+                    <button type="submit">Delete</button>
+                  </form>
+                 </div>
+                </div>
+            </div>
+        </div>
+     <% }); %>
+    <% } else { %>
+    <p>No books found.</p>
+    <% } %>
+  </div>
+    <footer>Copyright © chimax: <%= new Date().getFullYear() %></footer>
+</body>
+</html>

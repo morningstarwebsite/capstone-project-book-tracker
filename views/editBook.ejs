@@ -1,0 +1,35 @@
+
+
+ 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/styles/main.css" />
+    <title>Edit Book</title>
+</head>
+<body>
+    <header>
+        <div class = "hero">
+            <h1>My Book Tracker</h1>
+            <a href="/"> 
+                <p>Home</p>
+            </a>
+        </div>
+    </header>
+    <h2>Edit Book Review</h2>
+    <div edit-book>
+    <img src="<%= book.cover_url %>" alt="Book Cover" width="50">
+    <h3><%= book.title_id %></h3> 
+    <p><%= book.author_id %></p> 
+    </div>
+    <form action="/edit/<%= book.id %>" method="post"> 
+    <label for="review">Review:</label>
+    <textarea id="review" name="review" rows="4" cols="50"><%= book.review %></textarea>
+        <button type="submit">Edit</button>
+    </form>
+    <footer>Copyright © chimax: <%= new Date().getFullYear() %>
+    </footer>
+</body>
+</html>
