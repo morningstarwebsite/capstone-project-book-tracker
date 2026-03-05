@@ -1,28 +1,178 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="styles/main.css" />
-    <title>Add Book</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="/styles/main.css">
+  <title>Add Book — Book Tracker</title>
 </head>
 <body>
-    <header>
-        <div class = "hero">
-            <h1>My Book Tracker</h1>
-            <a href="/"> 
-                <p>Home</p>
-            </a>
+
+  <header>
+    <div class="hero">
+      <h1>My Book Tracker</h1>
+      <a href="/"><p>Home</p></a>
+    </div>
+  </header>
+
+  <main class="add-page">
+    <h2>Add a Book to Your Library</h2>
+    <p class="add-hint">Search by title, pick from the results, then write your review.</p>
+
+    <%# Server-side error (e.g. duplicate or not found) %>
+    <% if (message) { %>
+      <p class="form-error" id="serverError"><%= message %></p>
+    <% } %>
+
+    <form
+      id="addBookForm"
+      class="add-form"
+      action="/add"
+      method="post"
+      novalidate
+    >
+      <%# ── Search box (not submitted, drives the autocomplete) %>
+      <div class="field-group">
+        <label for="bookSearch">Search catalog</label>
+        <div class="autocomplete-wrap">
+          <input
+            type="text"
+            id="bookSearch"
+            placeholder="Start typing a book title…"
+            autocomplete="off"
+          >
+          <ul id="suggestions" class="suggestions" role="listbox" aria-label="Book suggestions"></ul>
         </div>
-    </header>
-    <h2>Add a New Book</h2>
-    <form class="book-add" action="/add" method="post">
-        <input type="text" name="title" placeholder="Book Title" required>
-        <input type="text" name="author" placeholder="Author Name" required>
-        <textarea name="review" placeholder="Your review"></textarea>
-        <button type="submit">Add Book</button>
+      </div>
+
+      <%# ── Selected-book preview card %>
+      <div id="bookPreview" class="book-preview hidden">
+        <img id="previewCover" src="" alt="Book cover">
+        <div class="preview-info">
+          <strong id="previewTitle"></strong>
+          <span id="previewAuthor"></span>
+        </div>
+        <button type="button" id="clearBtn" aria-label="Clear selection">✕</button>
+      </div>
+
+      <%# ── Hidden field — the actual value that gets submitted %>
+      <input type="hidden" name="title" id="selectedTitle">
+
+      <%# ── Review textarea %>
+      <div class="field-group">
+        <label for="review">Your review <span class="optional">(optional)</span></label>
+        <textarea id="review" name="review" placeholder="What did you think of this book?"></textarea>
+      </div>
+
+      <%# ── Client-side validation message %>
+      <p class="form-error" id="clientError"></p>
+
+      <button type="submit" class="btn-primary">Add to Library</button>
     </form>
-    <footer>Copyright © chimax: <%= new Date().getFullYear() %>
-    </footer>
+  </main>
+
+  <footer>Copyright &copy; chimax: <%= new Date().getFullYear() %></footer>
+
+  <script>
+    (() => {
+      const searchInput  = document.getElementById('bookSearch');
+      const suggestionEl = document.getElementById('suggestions');
+      const previewEl    = document.getElementById('bookPreview');
+      const previewCover = document.getElementById('previewCover');
+      const previewTitle = document.getElementById('previewTitle');
+      const previewAuth  = document.getElementById('previewAuthor');
+      const hiddenTitle  = document.getElementById('selectedTitle');
+      const clearBtn     = document.getElementById('clearBtn');
+      const clientError  = document.getElementById('clientError');
+      const form         = document.getElementById('addBookForm');
+
+      let debounce;
+
+      // ── Live search 
+      searchInput.addEventListener('input', () => {
+        clearTimeout(debounce);
+        const q = searchInput.value.trim();
+        if (!q) { closeSuggestions(); return; }
+
+        debounce = setTimeout(async () => {
+          try {
+            const res   = await fetch(`/api/catalog?q=${encodeURIComponent(q)}`);
+            const books = await res.json();
+            renderSuggestions(books);
+          } catch {
+            closeSuggestions();
+          }
+        }, 280);
+      });
+
+      // ── Render dropdown 
+      function renderSuggestions(books) {
+        suggestionEl.innerHTML = '';
+        if (!books.length) {
+          suggestionEl.innerHTML = '<li class="no-result">No books found in the catalog</li>';
+        } else {
+          books.forEach(book => {
+            const li = document.createElement('li');
+            li.setAttribute('role', 'option');
+            li.innerHTML = `<span class="sug-title">${book.title}</span>
+                            <span class="sug-author">${book.author}</span>`;
+            li.addEventListener('mousedown', (e) => {
+              e.preventDefault(); // keep focus on input
+              selectBook(book);
+            });
+            suggestionEl.appendChild(li);
+          });
+        }
+        suggestionEl.classList.add('open');
+      }
+
+      // ── User picks a book 
+      function selectBook(book) {
+        hiddenTitle.value       = book.title;
+        searchInput.value       = book.title;
+        previewCover.src        = book.cover_url || '';
+        previewTitle.textContent = book.title;
+        previewAuth.textContent  = 'by ' + book.author;
+        previewEl.classList.remove('hidden');
+        clientError.textContent = '';
+        closeSuggestions();
+        searchInput.blur();
+      }
+
+      // ── Clear selection 
+      clearBtn.addEventListener('click', () => {
+        hiddenTitle.value = '';
+        searchInput.value = '';
+        previewEl.classList.add('hidden');
+        closeSuggestions();
+        searchInput.focus();
+      });
+
+      function closeSuggestions() {
+        suggestionEl.innerHTML = '';
+        suggestionEl.classList.remove('open');
+      }
+
+      // Close dropdown when clicking elsewhere
+      document.addEventListener('click', (e) => {
+        if (!e.target.closest('.autocomplete-wrap')) closeSuggestions();
+      });
+
+      // Keyboard: Escape closes the dropdown
+      searchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeSuggestions();
+      });
+
+      // ── Custom form validation (replaces the browser tooltip) 
+      form.addEventListener('submit', (e) => {
+        if (!hiddenTitle.value.trim()) {
+          e.preventDefault();
+          clientError.textContent = 'Please search for and select a book before adding.';
+          searchInput.focus();
+        }
+      });
+    })();
+  </script>
+
 </body>
 </html>

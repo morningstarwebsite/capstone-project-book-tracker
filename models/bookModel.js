@@ -1,140 +1,107 @@
+import { Op } from 'sequelize';
+import { Book, BookLibrary } from './index.js';
 
-import db from "./db.js";
-
-// 🟢 Get All Books (Joined with Book Library)
+// ── Get every book in the user's library 
 export async function getAllBooks() {
-    const result = await db.query(
-        `SELECT book_librarys.id, books.title, books.author, books.cover_url, book_librarys.review
-         FROM books
-         JOIN book_librarys ON books.title = book_librarys.title_id`
-    );
-    return result.rows;
+  const entries = await BookLibrary.findAll({
+    include: [{ model: Book, as: 'book' }],
+    order: [['createdAt', 'DESC']],
+  });
+  return entries.map((e) => ({
+    id: e.id,
+    title: e.book.title,
+    author: e.book.author,
+    cover_url: e.book.cover_url,
+    review: e.review,
+  }));
 }
 
-// 🔍 Search Books
-export async function searchBooks(searchQuery) {
-  try { 
-    const result = await db.query(
-        `SELECT * FROM books  WHERE LOWER(title) ILIKE $1 `,
-        [`%${searchQuery}%`]
-    );
-    if (result.rows.length === 0) {
-      console.log("No books found."); // Debugging
-      return []; // Return empty array if no books found
-    }
-    console.log("Database Query Result:", result.rows); // Debugging
-    return result.rows;
-    } catch (err) {
-      console.error("Error searching books:", err);
-      return []; // Return empty array if an error occurs
-  }
+// ── Search the user's library by title 
+export async function searchBooks(query) {
+  const entries = await BookLibrary.findAll({
+    include: [
+      {
+        model: Book,
+        as: 'book',
+        where: { title: { [Op.iLike]: `%${query}%` } },
+      },
+    ],
+  });
+  return entries.map((e) => ({
+    id: e.id,
+    title: e.book.title,
+    author: e.book.author,
+    cover_url: e.book.cover_url,
+    review: e.review,
+  }));
 }
 
-// ➕ Add Book
-export async function addBook(title, review) { 
-  try {    
-    const result = await db.query(
-      "SELECT title, author, cover_url FROM books WHERE LOWER(title) = LOWER($1)",
-      [title.trim()]
-    );
-    console.log("🔍 Query Result:", result.rows); // 🔹 Log to check what’s returned
+// ── Search the full catalog (powers the autocomplete on the Add page) 
+export async function searchCatalog(query) {
+  const books = await Book.findAll({
+    where: query ? { title: { [Op.iLike]: `%${query}%` } } : {},
+    attributes: ['id', 'title', 'author', 'cover_url'],
+    order: [['title', 'ASC']],
+    limit: 12,
+  });
+  return books.map((b) => ({
+    id: b.id,
+    title: b.title,
+    author: b.author,
+    cover_url: b.cover_url,
+  }));
+}
 
-    if (result.rows.length === 0) {
-      console.log("Book not found in books table.");
-      return { success: false, message: "Book not found in database" };
-    }
-  
-    const data = result.rows[0];
-    const titleId = data.title;
-    const authorId = data.author;
-    const cover_url = data.cover_url;
-    // Check if the book already exists in book_librarys
-    const checkLibrary = await db.query(
-      "SELECT * FROM book_librarys WHERE title_id = $1",
-      [titleId]
-    );
-
-    if (checkLibrary.rows.length > 0) {
-      return { success: false, message: "This book is already in your library." };
-    }
-    try {
-      await db.query(
-        "INSERT INTO book_librarys (title_id, author_id, review, cover_url) VALUES ($1, $2, $3,$4) ",
-        [titleId, authorId,review,cover_url]
-      );
-
-    console.log("Book added to book_librarys.");
-    return { success: true , cover_url : cover_url};
-
-    } catch (err) {
-      console.log(err);
-    }
-  } catch (err) {
-    console.log(err);
-    return { success: false, message: "Database error" };
+// ── Add a book to the library 
+export async function addBook(title, review) {
+  const book = await Book.findOne({
+    where: { title: { [Op.iLike]: title.trim() } },
+  });
+  if (!book) {
+    return {
+      success: false,
+      message: `"${title}" was not found in the catalog. Please search and select a title from the list.`,
+    };
   }
-};
+  const existing = await BookLibrary.findOne({ where: { book_id: book.id } });
+  if (existing) {
+    return { success: false, message: 'This book is already in your library.' };
+  }
+  await BookLibrary.create({ book_id: book.id, review: review || null });
+  return { success: true };
+}
 
-
-
-// ✏️ Update Book
+// ── Fetch a library entry for the edit form 
 export async function fetchEdit(bookId) {
-  
-  const result = await db.query(
-    `SELECT book_librarys.id, book_librarys.review, book_librarys.title_id, book_librarys.author_id, books.title, books.cover_url
-     FROM book_librarys 
-     JOIN books ON book_librarys.title_id = books.title
-     WHERE book_librarys.id = $1`,
-    [bookId]
-  );
-  
-  return result;
-}
-export async function updateBook(id,review,) {
-   
-    const numericId = parseInt(id); // Ensure ID is an integer
-    if (isNaN(numericId)) {
-        console.error("Invalid book ID:", id);
-        throw new Error("Invalid book ID");
-    }
-    try {
-
-       // Check if book exists
-       const checkResult = await db.query(`SELECT * FROM book_librarys WHERE id = $1`, [numericId]);
-       if (checkResult.rowCount === 0) {
-           console.warn("Book ID does not exist:", numericId);
-           throw new Error("Book ID does not exist.");
-       }
-      const queryString = `
-          UPDATE book_librarys
-          SET review = $1
-          WHERE id = $2
-      `;
-      const values = [review,numericId ];
-
-      // Log the query for debugging
-      console.log("Executing query:", queryString);
-      console.log("With values:", values);
-
-      const result = await db.query(queryString, values); // Execute the query to update the review
-      console.log("Update result:", result);
-      if (result.rowCount === 0) {
-        console.warn("No rows updated. Book ID may not exist.");
-    }
-    return result;
-  } catch (err) {
-      console.error("Error updating review:", err);
-      throw new Error("Failed to update review.");
-  }
+  const numericId = parseInt(bookId);
+  if (isNaN(numericId)) return null;
+  const entry = await BookLibrary.findByPk(numericId, {
+    include: [{ model: Book, as: 'book' }],
+  });
+  if (!entry) return null;
+  return {
+    id: entry.id,
+    review: entry.review,
+    title: entry.book.title,
+    author: entry.book.author,
+    cover_url: entry.book.cover_url,
+  };
 }
 
-// 🗑️ Delete Book
+// ── Update a review for a book in the library
+export async function updateBook(id, review) {
+  const numericId = parseInt(id);
+  if (isNaN(numericId)) throw new Error('Invalid book ID');
+  const entry = await BookLibrary.findByPk(numericId);
+  if (!entry) throw new Error('Book not found in library.');
+  entry.review = review;
+  await entry.save();
+  return entry;
+}
+
+// ── Delete a book from the library
 export async function deleteBook(id) {
-    await db.query(`DELETE FROM book_librarys WHERE id=$1`, [id]);
-};
-
- 
-
-
-
-
+  const numericId = parseInt(id);
+  if (isNaN(numericId)) throw new Error('Invalid book ID');
+  await BookLibrary.destroy({ where: { id: numericId } });
+}
