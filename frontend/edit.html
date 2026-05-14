@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="styles/main.css">
+  <title>Edit Book — Book Tracker</title>
+</head>
+<body>
+
+  <header>
+    <div class="hero">
+      <h1>My Book Tracker</h1>
+      <a href="index.html"><p>Home</p></a>
+    </div>
+  </header>
+
+  <h2>Edit Book Review</h2>
+
+  <div id="content">
+    <p class="status-msg">Loading…</p>
+  </div>
+
+  <footer>Copyright &copy; chimax: <span id="year"></span></footer>
+
+  <script src="config.js"></script>
+  <script>
+    document.getElementById('year').textContent = new Date().getFullYear();
+
+    const params = new URLSearchParams(window.location.search);
+    const id     = params.get('id');
+
+    if (!id) {
+      document.getElementById('content').innerHTML =
+        '<p class="status-msg">No book selected. <a href="index.html">Go back</a></p>';
+    } else {
+      fetch(`${API_BASE}/api/books/${id}`)
+        .then(res => res.ok ? res.json() : Promise.reject())
+        .then(book => {
+          document.getElementById('content').innerHTML = `
+            <div class="edit-book">
+              <img src="${escHtml(book.cover_url)}" alt="Book Cover">
+              <h3>${escHtml(book.title)}</h3>
+              <p>by ${escHtml(book.author)}</p>
+            </div>
+            <form id="editForm">
+              <label for="review">Review:</label>
+              <textarea id="review" name="review" rows="4" cols="50">${escHtml(book.review || '')}</textarea>
+              <p class="form-error" id="errorMsg"></p>
+              <button type="submit">Save Review</button>
+            </form>
+          `;
+
+          document.getElementById('editForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const review = document.getElementById('review').value;
+
+            const res  = await fetch(`${API_BASE}/api/books/${id}`, {
+              method:  'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body:    JSON.stringify({ review }),
+            });
+            const data = await res.json();
+
+            if (!res.ok) {
+              document.getElementById('errorMsg').textContent = data.error || 'Something went wrong.';
+              return;
+            }
+
+            window.location.href = 'index.html';
+          });
+        })
+        .catch(() => {
+          document.getElementById('content').innerHTML =
+            '<p class="status-msg">Book not found. <a href="index.html">Go back</a></p>';
+        });
+    }
+
+    function escHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+  </script>
+
+</body>
+</html>

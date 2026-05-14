@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="styles/main.css">
+  <title>Add Book — Book Tracker</title>
+</head>
+<body>
+
+  <header>
+    <div class="hero">
+      <h1>My Book Tracker</h1>
+      <a href="index.html"><p>Home</p></a>
+    </div>
+  </header>
+
+  <main class="add-page">
+    <h2>Add a Book to Your Library</h2>
+    <p class="add-hint">Search by title, pick from the results, then write your review.</p>
+
+    <p class="form-error" id="serverError"></p>
+
+    <form id="addBookForm" class="add-form" novalidate>
+
+      <div class="field-group">
+        <label for="bookSearch">Search catalog</label>
+        <div class="autocomplete-wrap">
+          <input
+            type="text"
+            id="bookSearch"
+            placeholder="Start typing a book title…"
+            autocomplete="off"
+          >
+          <ul id="suggestions" class="suggestions" role="listbox" aria-label="Book suggestions"></ul>
+        </div>
+      </div>
+
+      <div id="bookPreview" class="book-preview hidden">
+        <img id="previewCover" src="" alt="Book cover">
+        <div class="preview-info">
+          <strong id="previewTitle"></strong>
+          <span id="previewAuthor"></span>
+        </div>
+        <button type="button" id="clearBtn" aria-label="Clear selection">&#x2715;</button>
+      </div>
+
+      <input type="hidden" id="selectedTitle">
+
+      <div class="field-group">
+        <label for="review">Your review <span class="optional">(optional)</span></label>
+        <textarea id="review" placeholder="What did you think of this book?"></textarea>
+      </div>
+
+      <p class="form-error" id="clientError"></p>
+
+      <button type="submit" class="btn-primary">Add to Library</button>
+    </form>
+  </main>
+
+  <footer>Copyright &copy; chimax: <span id="year"></span></footer>
+
+  <script src="config.js"></script>
+  <script>
+    document.getElementById('year').textContent = new Date().getFullYear();
+
+    (() => {
+      const searchInput  = document.getElementById('bookSearch');
+      const suggestionEl = document.getElementById('suggestions');
+      const previewEl    = document.getElementById('bookPreview');
+      const previewCover = document.getElementById('previewCover');
+      const previewTitle = document.getElementById('previewTitle');
+      const previewAuth  = document.getElementById('previewAuthor');
+      const hiddenTitle  = document.getElementById('selectedTitle');
+      const clearBtn     = document.getElementById('clearBtn');
+      const clientError  = document.getElementById('clientError');
+      const serverError  = document.getElementById('serverError');
+      const form         = document.getElementById('addBookForm');
+
+      let debounce;
+
+      // ── Live search
+      searchInput.addEventListener('input', () => {
+        clearTimeout(debounce);
+        const q = searchInput.value.trim();
+        if (!q) { closeSuggestions(); return; }
+
+        debounce = setTimeout(async () => {
+          try {
+            const res   = await fetch(`${API_BASE}/api/catalog?q=${encodeURIComponent(q)}`);
+            const books = await res.json();
+            renderSuggestions(books);
+          } catch {
+            closeSuggestions();
+          }
+        }, 280);
+      });
+
+      // ── Render dropdown
+      function renderSuggestions(books) {
+        suggestionEl.innerHTML = '';
+        if (!books.length) {
+          suggestionEl.innerHTML = '<li class="no-result">No books found in the catalog</li>';
+        } else {
+          books.forEach(book => {
+            const li = document.createElement('li');
+            li.setAttribute('role', 'option');
+            li.innerHTML = `<span class="sug-title">${escHtml(book.title)}</span>
+                            <span class="sug-author">${escHtml(book.author)}</span>`;
+            li.addEventListener('mousedown', (e) => {
+              e.preventDefault();
+              selectBook(book);
+            });
+            suggestionEl.appendChild(li);
+          });
+        }
+        suggestionEl.classList.add('open');
+      }
+
+      // ── User picks a book
+      function selectBook(book) {
+        hiddenTitle.value        = book.title;
+        searchInput.value        = book.title;
+        previewCover.src         = book.cover_url || '';
+        previewTitle.textContent = book.title;
+        previewAuth.textContent  = 'by ' + book.author;
+        previewEl.classList.remove('hidden');
+        clientError.textContent  = '';
+        closeSuggestions();
+        searchInput.blur();
+      }
+
+      // ── Clear selection
+      clearBtn.addEventListener('click', () => {
+        hiddenTitle.value = '';
+        searchInput.value = '';
+        previewEl.classList.add('hidden');
+        closeSuggestions();
+        searchInput.focus();
+      });
+
+      function closeSuggestions() {
+        suggestionEl.innerHTML = '';
+        suggestionEl.classList.remove('open');
+      }
+
+      document.addEventListener('click', (e) => {
+        if (!e.target.closest('.autocomplete-wrap')) closeSuggestions();
+      });
+
+      searchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeSuggestions();
+      });
+
+      // ── Submit
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        serverError.textContent = '';
+
+        if (!hiddenTitle.value.trim()) {
+          clientError.textContent = 'Please search for and select a book before adding.';
+          searchInput.focus();
+          return;
+        }
+        clientError.textContent = '';
+
+        const res  = await fetch(`${API_BASE}/api/books`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({
+            title:  hiddenTitle.value,
+            review: document.getElementById('review').value,
+          }),
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          serverError.textContent = data.error || 'Something went wrong.';
+          return;
+        }
+
+        window.location.href = 'index.html';
+      });
+
+      function escHtml(str) {
+        return String(str)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+      }
+    })();
+  </script>
+
+</body>
+</html>

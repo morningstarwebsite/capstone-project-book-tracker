@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="styles/main.css">
+  <title>Book Tracker</title>
+</head>
+<body>
+
+  <header>
+    <div class="hero">
+      <h1>My Book Tracker</h1>
+      <a href="index.html"><p>Home</p></a>
+    </div>
+  </header>
+
+  <div class="books">
+
+    <form class="book-search" id="searchForm" novalidate>
+      <input type="text" id="searchInput" name="q" placeholder="Search your library…">
+      <button type="submit">Search</button>
+    </form>
+
+    <a class="add-book" href="add.html">+ Add New Book</a>
+
+    <p class="status-msg" id="statusMsg" style="display:none;"></p>
+    <div id="bookList"></div>
+
+  </div>
+
+  <footer>Copyright &copy; chimax: <span id="year"></span></footer>
+
+  <script src="config.js"></script>
+  <script>
+    document.getElementById('year').textContent = new Date().getFullYear();
+
+    async function loadBooks(query) {
+      const url = query
+        ? `${API_BASE}/api/books/search?q=${encodeURIComponent(query)}`
+        : `${API_BASE}/api/books`;
+
+      const res = await fetch(url);
+      const books = await res.json();
+      renderBooks(books, query);
+    }
+
+    function renderBooks(books, query) {
+      const list = document.getElementById('bookList');
+      const msg  = document.getElementById('statusMsg');
+
+      if (books.length === 0) {
+        list.innerHTML = '';
+        msg.style.display = '';
+        msg.innerHTML = query
+          ? 'No books found in your library.'
+          : 'Your library is empty. <a href="add.html">Add your first book!</a>';
+        return;
+      }
+
+      msg.style.display = 'none';
+      list.innerHTML = books.map(book => `
+        <div class="book">
+          <div class="book-details">
+            <img src="${book.cover_url}" alt="Cover of ${escHtml(book.title)}">
+            <div class="book-info">
+              <h3><strong>${escHtml(book.title)}</strong></h3>
+              <h4>by ${escHtml(book.author)}</h4>
+              <h4>Review:</h4>
+              <p>${escHtml(book.review || 'No review yet.')}</p>
+              <div class="button edit">
+                <a href="edit.html?id=${book.id}"><button type="button">Edit</button></a>
+                <button type="button" onclick="deleteBook(${book.id})">Delete</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function deleteBook(id) {
+      await fetch(`${API_BASE}/api/books/${id}`, { method: 'DELETE' });
+      loadBooks();
+    }
+
+    // Prevent empty search
+    document.getElementById('searchForm').addEventListener('submit', function (e) {
+      e.preventDefault();
+      const val = document.getElementById('searchInput').value.trim();
+      if (!val) {
+        const input = document.getElementById('searchInput');
+        input.placeholder = 'Type something to search your library…';
+        input.classList.add('input-shake');
+        setTimeout(() => input.classList.remove('input-shake'), 500);
+        return;
+      }
+      loadBooks(val);
+    });
+
+    function escHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    loadBooks();
+  </script>
+
+</body>
+</html>
