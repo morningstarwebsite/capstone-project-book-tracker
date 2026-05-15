@@ -34,11 +34,6 @@ app.delete('/api/books/:id',  removeBook);
 // ── Catalog API (autocomplete search on the Add page) ─────────────────────────
 app.get('/api/catalog',       getCatalog);
 
-// Local dev only — Vercel uses the exported app instead
-if (process.env.NODE_ENV !== 'production') {
-  app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
-}
-
-export default app;
+app.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
+});
